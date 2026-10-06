@@ -1,0 +1,4 @@
+Shipment_ID,Shipment_Type,ETD,ETA,Actual_Arrival,Actual_Dispatch_Date,Planned_Delivery_Date,Factory_Delivery_Date,Origin_Country,Destination_Country,Port,Material_Category,Mode,Supplier,CHA,Freight_Forwarder,Shipment_Status,Customs_Status,Risk_Status,Delay_Reason,Delay_Days,Shipment_Value,Freight_Cost,Weight_KG,Customs_Duty,BOE_Date,Clearance_Date,Clearance_TAT,SLA_Days
+A,Import,2026-01-01,2026-01-05,2026-01-05,2026-01-01,2026-01-08,2026-01-08,Japan,India,Chennai,PCB,Sea,One,CHA One,Forwarder One,Cleared,Cleared,On Track,,0,100,10,10,5,2026-01-05,2026-01-07,2,2
+B,Import,2026-01-02,2026-01-06,2026-01-08,2026-01-03,2026-01-10,2026-01-12,Japan,India,Mundra,PCB,Sea,Two,CHA Two,Forwarder Two,Customs Pending,Pending,Critical,Customs Hold,2,300,30,10,15,2026-01-08,,9,3
+C,Export,2026-03-01,2026-03-05,,2026-03-02,,,India,UAE,Chennai,Finished Goods,Air,One,CHA One,Forwarder One,In Transit,Pending,On Track,,,,50,,,,,,

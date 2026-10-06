@@ -1,69 +1,1630 @@
-import React,{useEffect,useMemo,useState} from 'react';
-import{createRoot}from'react-dom/client';
-import{BarChart,Bar,LineChart,Line,AreaChart,Area,PieChart,Pie,Cell,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,Legend}from'recharts';
-import{LayoutDashboard,Import as ImportIcon,Send,Ship,FileCheck2,IndianRupee,Handshake,TriangleAlert,Factory,Database,Download,Menu,X,ChevronDown,Filter,Search,CalendarDays,ArrowUpRight,ArrowDownRight,Clock3,Plane,Anchor,MapPin,Eye,SlidersHorizontal,FileSpreadsheet,FileText,RefreshCw,CheckCircle2,AlertCircle,Box,Columns3,PanelLeftClose,PanelLeftOpen}from'lucide-react';
-import*as XLSX from'xlsx';import{jsPDF}from'jspdf';
-import{generateData,fmtINR,countries,ports,suppliers,chas,forwarders,materials,reasons}from'./data';
-import'./styles.css';
+import React, { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  ComposedChart,
+  Area,
+  AreaChart,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  ReferenceLine,
+} from "recharts";
+import {
+  LayoutDashboard,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  FileCheck2,
+  Truck,
+  Handshake,
+  TriangleAlert,
+  Factory,
+  RadioTower,
+  Database,
+  Download,
+  Upload,
+  Search,
+  SlidersHorizontal,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Info,
+  Columns3,
+  Menu,
+  LoaderCircle,
+  ArrowUpRight,
+} from "lucide-react";
+import { VIEWS, DEFAULT_FILTERS, FIELDS, NUMBERS } from "./analytics";
+import "./styles.css";
 
-const NAV=[['Executive Overview',LayoutDashboard],['Import Analytics',ImportIcon],['Export Analytics',Send],['Shipment Control Tower',Ship],['Customs & Clearance',FileCheck2],['Freight & Cost Analytics',IndianRupee],['CHA / Forwarder Performance',Handshake],['Delay & RCA',TriangleAlert],['Vendor / Supplier Analytics',Factory],['Data Explorer',Database],['Reports & Downloads',Download]];
-const COLORS=['#a50034','#d43b5e','#24384b','#5e7f94','#e2a93b','#77a88d'];
-const moneyKeys=new Set(['Shipment_Value','Freight_Cost','Customs_Duty','CHA_Charges','Detention_Cost','Demurrage_Cost']);
-const sum=(a,k)=>a.reduce((s,x)=>s+(+x[k]||0),0),avg=(a,k)=>a.length?sum(a,k)/a.length:0;
-function group(data,key,val='Shipment_ID',limit=8){const m={};data.forEach(x=>m[x[key]]=(m[x[key]]||0)+(val==='Shipment_ID'?1:+x[val]||0));return Object.entries(m).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value).slice(0,limit)}
-function months(data,val='Shipment_ID'){const m={};data.forEach(x=>{let k=x.ETD.slice(0,7);m[k]??={name:k,Import:0,Export:0,total:0};let v=val==='Shipment_ID'?1:+x[val]||0;m[k][x.Shipment_Type]+=v;m[k].total+=v});return Object.values(m).sort((a,b)=>a.name.localeCompare(b.name)).slice(-12)}
-function Logo(){return <div className="brand"><div className="lgmark"><span>L</span><b>G</b></div><div><strong>LG EXIM Intelligence</strong><small>Operational Command Center</small></div></div>}
-function MiniLogo(){return <div className="lgmark mini"><span>L</span><b>G</b></div>}
-function App(){
- const[raw,setRaw]=useState([]),[loading,setLoading]=useState(true),[page,setPage]=useState('Executive Overview'),[side,setSide]=useState(true),[mobile,setMobile]=useState(false),[more,setMore]=useState(false),[filters,setFilters]=useState({start:'2024-10-07',end:'2026-10-06',type:'All',status:'All',mode:'All',origin:'All',dest:'All',port:'All',supplier:'All',cha:'All',ff:'All',material:'All',incoterm:'All'}),[applied,setApplied]=useState(null),[drawer,setDrawer]=useState(null),[toast,setToast]=useState('');
- useEffect(()=>{setTimeout(()=>{let d=generateData(50000);setRaw(d);setApplied(filters);setLoading(false)},500)},[]);
- const data=useMemo(()=>{if(!applied)return[];return raw.filter(x=>x.ETD>=applied.start&&x.ETD<=applied.end&&(applied.type==='All'||x.Shipment_Type===applied.type)&&(applied.status==='All'||x.Shipment_Status===applied.status)&&(applied.mode==='All'||x.Mode===applied.mode)&&(applied.origin==='All'||x.Origin_Country===applied.origin)&&(applied.dest==='All'||x.Destination_Country===applied.dest)&&(applied.port==='All'||x.Port===applied.port)&&(applied.supplier==='All'||x.Supplier===applied.supplier)&&(applied.cha==='All'||x.CHA===applied.cha)&&(applied.ff==='All'||x.Freight_Forwarder===applied.ff)&&(applied.material==='All'||x.Material_Category===applied.material)&&(applied.incoterm==='All'||x.Incoterm===applied.incoterm))},[raw,applied]);
- const notify=t=>{setToast(t);setTimeout(()=>setToast(''),2600)};
- const download=(rows,format='csv',name='lg-exim-data')=>{if(format==='json'){save(new Blob([JSON.stringify(rows,null,2)],{type:'application/json'}),name+'.json')}else{let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'EXIM Data');if(format==='xlsx')XLSX.writeFile(wb,name+'.xlsx');else XLSX.writeFile(wb,name+'.csv',{bookType:'csv'})}notify(`Downloaded ${rows.length.toLocaleString()} records`)};
- const reset=()=>{const f={...filters,start:'2024-10-07',end:'2026-10-06',type:'All',status:'All',mode:'All',origin:'All',dest:'All',port:'All',supplier:'All',cha:'All',ff:'All',material:'All',incoterm:'All'};setFilters(f);setApplied(f)};
- return <div className="app">
-  <aside className={`${side?'':'collapsed'} ${mobile?'mobile-open':''}`}><div className="sidehead">{side?<Logo/>:<MiniLogo/>}<button onClick={()=>setSide(!side)} className="iconbtn collapse">{side?<PanelLeftClose/>:<PanelLeftOpen/>}</button></div><nav>{NAV.map(([n,I])=><button key={n} className={page===n?'active':''} onClick={()=>{setPage(n);setMobile(false)}}><I/><span>{n}</span></button>)}</nav><div className="sidefoot"><div className="avatar">EX</div>{side&&<div><b>Greater Noida EXIM</b><small>Operations workspace</small></div>}</div></aside>
-  {mobile&&<div className="shade" onClick={()=>setMobile(false)}/>}<main className={side?'':'wide'}>
-   <header><button className="hamb" onClick={()=>setMobile(true)}><Menu/></button><div><h1>{page}</h1><p>Greater Noida · Import, Export & Logistics Intelligence</p></div><div className="header-actions"><span className="live"><i/> Data synced 9:42 AM</span><button className="iconbtn"><CalendarDays/></button><div className="user">AS</div></div></header>
-   <Filterbar filters={filters} setFilters={setFilters} applied={applied} onApply={()=>{setApplied({...filters});notify('Filters applied')}} reset={reset} more={more} setMore={setMore} download={()=>download(data.slice(0,10000),'xlsx','LG-EXIM-current-view')}/>
-   <section className="content">{loading?<Skeleton/>:<Page name={page} data={data} raw={raw} onOpen={setDrawer} download={download}/>}</section>
-  </main>{drawer&&<ShipmentDrawer s={drawer} close={()=>setDrawer(null)}/>} {toast&&<div className="toast"><CheckCircle2/>{toast}</div>}
- </div>
-}
-function save(blob,name){let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
-function Select({label,value,onChange,opts}){return <label className="filter"><span>{label}</span><div><select value={value} onChange={e=>onChange(e.target.value)}>{['All',...opts].map(x=><option key={x}>{x}</option>)}</select><ChevronDown/></div></label>}
-function Filterbar({filters,setFilters,applied,onApply,reset,more,setMore,download}){const set=(k,v)=>setFilters(f=>({...f,[k]:v}));const active=applied?Object.entries(applied).filter(([k,v])=>!['start','end'].includes(k)&&v!=='All'):[];return <div className="filterwrap"><div className="filterbar"><label className="filter date"><span>Date range</span><div><input type="date" value={filters.start} onChange={e=>set('start',e.target.value)}/><em>–</em><input type="date" value={filters.end} onChange={e=>set('end',e.target.value)}/></div></label><Select label="Flow" value={filters.type} onChange={v=>set('type',v)} opts={['Import','Export']}/><Select label="Status" value={filters.status} onChange={v=>set('status',v)} opts={['Cleared','In Transit','Customs Pending','Delayed','Documentation Pending']}/><Select label="Mode" value={filters.mode} onChange={v=>set('mode',v)} opts={['Air','Sea']}/><Select label="Port" value={filters.port} onChange={v=>set('port',v)} opts={ports}/><button className="morebtn" onClick={()=>setMore(!more)}><SlidersHorizontal/>More</button><div className="filter-actions"><button className="btn primary" onClick={onApply}>Apply filters</button><button className="btn" onClick={reset}><RefreshCw/> Reset</button><button className="btn icononly" title="Download current view" onClick={download}><Download/></button></div></div>{more&&<div className="morefilters"><Select label="Origin" value={filters.origin} onChange={v=>set('origin',v)} opts={countries}/><Select label="Destination" value={filters.dest} onChange={v=>set('dest',v)} opts={countries}/><Select label="Supplier" value={filters.supplier} onChange={v=>set('supplier',v)} opts={suppliers}/><Select label="CHA" value={filters.cha} onChange={v=>set('cha',v)} opts={chas}/><Select label="Forwarder" value={filters.ff} onChange={v=>set('ff',v)} opts={forwarders}/><Select label="Material" value={filters.material} onChange={v=>set('material',v)} opts={materials}/><Select label="Incoterm" value={filters.incoterm} onChange={v=>set('incoterm',v)} opts={['FOB','CIF','EXW','FCA','DAP','DDP']}/></div>}{active.length>0&&<div className="chips"><span>Active:</span>{active.map(([k,v])=><button key={k} onClick={()=>set(k,'All')}>{k}: {v}<X/></button>)}</div>}</div>}
-function Skeleton(){return <div className="skeleton"><div className="sk hero"/><div className="kpi-grid">{[1,2,3,4,5].map(x=><div className="sk card" key={x}/>)}</div><div className="charts-grid"><div className="sk chart"/><div className="sk chart"/></div></div>}
-function Page(p){if(!p.data.length)return <Empty/>;if(p.name==='Executive Overview')return <Executive {...p}/>;if(p.name==='Shipment Control Tower')return <ControlTower {...p}/>;if(p.name==='Data Explorer')return <DataExplorer {...p}/>;if(p.name==='Reports & Downloads')return <Reports {...p}/>;return <AnalysisPage {...p}/>}
-function Empty(){return <div className="empty"><div><Search/></div><h2>No shipments match these filters</h2><p>Adjust or reset the global filters to continue.</p></div>}
-const kpi=(label,value,delta=2.8,good=true,sub='vs previous period')=>({label,value,delta,good,sub});
-function KPI({x}){return <div className="kpi"><div className="kpi-top"><span>{x.label}</span><div className="trendline">⌁</div></div><strong>{x.value}</strong><small className={x.good?'good':'bad'}>{x.delta>=0?<ArrowUpRight/>:<ArrowDownRight/>}{Math.abs(x.delta)}% <em>{x.sub}</em></small></div>}
-function Executive({data,onOpen}){let imports=data.filter(x=>x.Shipment_Type==='Import'),exports=data.filter(x=>x.Shipment_Type==='Export'),delayed=data.filter(x=>x.Delay_Days>0),ontime=(100-delayed.length/data.length*100), status=group(data,'Shipment_Status'),mode=group(data,'Mode');let ks=[kpi('Total Import Value',fmtINR(sum(imports,'Shipment_Value')),6.4),kpi('Total Export Value',fmtINR(sum(exports,'Shipment_Value')),4.1),kpi('Total Shipments',data.length.toLocaleString('en-IN'),3.8),kpi('Pending Shipments',data.filter(x=>x.Shipment_Status!=='Cleared').length.toLocaleString('en-IN'),-5.2,true),kpi('Delayed Shipments',delayed.length.toLocaleString('en-IN'),7.6,false),kpi('On-Time %',ontime.toFixed(1)+'%',2.8),kpi('Avg Clearance TAT',avg(data,'Clearance_TAT').toFixed(1)+' days',-4.5,true),kpi('Total Freight Cost',fmtINR(sum(data,'Freight_Cost')),8.1,false)];return <><div className="hero-panel"><div className="hero-copy"><span className="eyebrow">EXECUTIVE PULSE · 06 OCT 2026</span><h2>Trade operations, under control.</h2><p>Live visibility across imports, exports, customs and logistics cost for Greater Noida operations.</p><div className="hero-stats"><span><b>{data.filter(x=>x.Risk_Status==='Critical').length}</b> critical movements</span><span><b>{data.filter(x=>x.Shipment_Status==='Customs Pending').length}</b> awaiting customs</span></div></div><div className="hero-img"/></div><div className="section-title"><div><h2>Performance snapshot</h2><p>Current filtered period compared with previous period</p></div><span className="records">{data.length.toLocaleString()} records</span></div><div className="kpi-grid">{ks.map((x,i)=><KPI x={x} key={i}/>)}</div><Insights data={data}/><div className="charts-grid"><ChartCard title="Shipment trend" sub="Monthly Import vs Export volume" wide><ResponsiveContainer><AreaChart data={months(data)}><defs><linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#a50034" stopOpacity=".24"/><stop offset="1" stopColor="#a50034" stopOpacity="0"/></linearGradient></defs><CartesianGrid vertical={false} stroke="#edf0f2"/><XAxis dataKey="name"/><YAxis/><Tooltip/><Legend/><Area type="monotone" dataKey="Import" stroke="#a50034" fill="url(#red)"/><Line type="monotone" dataKey="Export" stroke="#24384b"/></AreaChart></ResponsiveContainer></ChartCard><ChartCard title="Shipment status" sub="Current operational stage"><ResponsiveContainer><PieChart><Pie data={status} dataKey="value" innerRadius={62} outerRadius={90} paddingAngle={3}>{status.map((_,i)=><Cell fill={COLORS[i%COLORS.length]} key={i}/>)}</Pie><Tooltip/><Legend verticalAlign="bottom"/></PieChart></ResponsiveContainer></ChartCard><ChartCard title="Top origin countries" sub="By shipment value"><BarVisual data={group(data,'Origin_Country','Shipment_Value',6)} money/></ChartCard><ChartCard title="Port performance" sub="Shipment volume by gateway"><BarVisual data={group(data,'Port','Shipment_ID',6)} horizontal/></ChartCard><ChartCard title="Monthly logistics cost" sub="Freight cost trend"><LineVisual data={months(data,'Freight_Cost')} money/></ChartCard><ChartCard title="Mode split" sub="Air vs Sea movements"><ResponsiveContainer><PieChart><Pie data={mode} dataKey="value" innerRadius={56} outerRadius={88}>{mode.map((_,i)=><Cell fill={i?'#24384b':'#a50034'} key={i}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></ChartCard></div><ExceptionTable data={data.filter(x=>x.Risk_Status!=='On Track').slice(0,6)} onOpen={onOpen}/></>}
-function Insights({data}){let delayed=data.filter(x=>x.Delay_Days>5),det=sum(data,'Detention_Cost'),doc=data.filter(x=>x.Delay_Reason==='Documentation Issue').length;let cha=group(data.filter(x=>x.Delay_Days>0),'CHA')[0];return <div className="attention"><div className="attention-title"><div className="att-icon"><TriangleAlert/></div><div><h3>Management attention required</h3><p>Highest-impact exceptions generated from current data</p></div><span>4 actions</span></div><div className="insight-grid"><div><b>{delayed.length.toLocaleString()} shipments delayed &gt;5 days</b><small>Critical delays require route-owner review</small></div><div><b>{fmtINR(det)} detention cost incurred</b><small>Sea shipments account for most exposure</small></div><div><b>{cha?.name} above target</b><small>{cha?.value} delayed clearances in selection</small></div><div><b>{((doc/Math.max(1,data.filter(x=>x.Delay_Days>0).length))*100).toFixed(0)}% documentation-related delays</b><small>Primary preventable root cause</small></div></div></div>}
-function ChartCard({title,sub,children,wide}){return <div className={`chart-card ${wide?'widechart':''}`}><div className="cardhead"><div><h3>{title}</h3><p>{sub}</p></div><button><Download/></button></div><div className="chartbody">{children}</div></div>}
-function BarVisual({data,money,horizontal}){return <ResponsiveContainer><BarChart data={data} layout={horizontal?'vertical':'horizontal'} margin={{left:horizontal?15:0,bottom:10}}><CartesianGrid stroke="#edf0f2" vertical={!horizontal}/>{horizontal?<><XAxis type="number"/><YAxis dataKey="name" type="category" width={105}/></>:<><XAxis dataKey="name" angle={-15} textAnchor="end" height={55}/><YAxis tickFormatter={v=>money?fmtINR(v):v}/></>}<Tooltip formatter={v=>money?fmtINR(v):v.toLocaleString()}/><Bar dataKey="value" fill="#a50034" radius={horizontal?[0,6,6,0]:[6,6,0,0]} maxBarSize={34}/></BarChart></ResponsiveContainer>}
-function LineVisual({data,money}){return <ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false} stroke="#edf0f2"/><XAxis dataKey="name"/><YAxis tickFormatter={v=>money?fmtINR(v):v}/><Tooltip formatter={v=>money?fmtINR(v):v}/><Line dataKey="total" stroke="#a50034" strokeWidth={2.5} dot={false}/></LineChart></ResponsiveContainer>}
-function ExceptionTable({data,onOpen,title='Priority shipment exceptions'}){return <div className="table-card"><div className="cardhead"><div><h3>{title}</h3><p>Immediate operational follow-up required</p></div><button className="textbtn">View control tower <ArrowUpRight/></button></div><div className="table-scroll"><table><thead><tr><th>Shipment</th><th>Flow</th><th>Partner</th><th>Gateway</th><th>Stage</th><th>Delay</th><th>Value</th><th>Risk</th></tr></thead><tbody>{data.map(s=><tr key={s.Shipment_ID}><td><button className="link" onClick={()=>onOpen(s)}>{s.Shipment_ID}</button></td><td>{s.Shipment_Type}</td><td>{s.Shipment_Type==='Import'?s.Supplier:s.Customer}</td><td>{s.Port}</td><td>{s.Current_Stage}</td><td>{s.Delay_Days} days</td><td>{fmtINR(s.Shipment_Value)}</td><td><Risk r={s.Risk_Status}/></td></tr>)}</tbody></table></div></div>}
-function Risk({r}){return <span className={`risk ${r.toLowerCase().replace(' ','-')}`}><i/>{r}</span>}
-const PAGECFG={
-'Import Analytics':{flow:'Import',title:'Import performance',kpis:['Total Import Value','Import Shipments','In-Transit Shipments','Customs Pending','Delayed Imports','Avg Clearance TAT','Import Freight Cost','Cost per Shipment'],charts:[['Monthly import value','Shipment_Value','month'],['Country-wise imports','Origin_Country','Shipment_Value'],['Supplier-wise imports','Supplier','Shipment_Value'],['Material category','Material_Category','Shipment_ID'],['Port-wise imports','Port','Shipment_ID'],['Duty trend','Customs_Duty','month']]},
-'Export Analytics':{flow:'Export',title:'Export performance',kpis:['Export Value','Export Shipments','Pending Exports','On-Time Dispatch %','Delayed Exports','Avg Documentation TAT','Avg Shipment TAT','Export Freight Cost'],charts:[['Export value trend','Shipment_Value','month'],['Destination country','Destination_Country','Shipment_Value'],['Customer / consignee','Customer','Shipment_Value'],['Port','Port','Shipment_ID'],['Mode','Mode','Shipment_ID'],['Export delay reasons','Delay_Reason','Shipment_ID']]},
-'Customs & Clearance':{title:'Customs clearance performance',kpis:['BOE Filed','BOE Pending','Customs Pending','Avg Clearance TAT','Clearance Within SLA %','Duty Paid','Documentation Issues'],charts:[['Clearance TAT trend','Clearance_TAT','month'],['Port-wise clearance TAT','Port','Clearance_TAT'],['CHA-wise clearance','CHA','Shipment_ID'],['BOE aging','Clearance_TAT','aging'],['Duty trend','Customs_Duty','month'],['Documentation issues','Delay_Reason','Shipment_ID']]},
-'Freight & Cost Analytics':{title:'End-to-end logistics cost',kpis:['Total Freight Cost','Air Freight','Sea Freight','Customs Duty','CHA Charges','Detention & Demurrage','Cost per Shipment','Freight as % of Value'],charts:[['Monthly freight trend','Freight_Cost','month'],['Air vs Sea cost','Mode','Freight_Cost'],['Forwarder-wise cost','Freight_Forwarder','Freight_Cost'],['Route-wise cost','Origin_Country','Freight_Cost'],['Cost per KG','Mode','Freight_Cost'],['Detention / demurrage','Detention_Cost','month']]},
-'CHA / Forwarder Performance':{title:'Partner service performance',kpis:['Total Shipments','On-Time %','Average Clearance TAT','Documentation Accuracy','Delayed Shipments','Average Freight Cost','Detention Cases','SLA Compliance %'],charts:[['CHA shipment volume','CHA','Shipment_ID'],['CHA delays','CHA','Delay_Days'],['Forwarder cost','Freight_Forwarder','Freight_Cost'],['Forwarder volume','Freight_Forwarder','Shipment_ID'],['SLA compliance','CHA','Shipment_ID'],['Clearance TAT','CHA','Clearance_TAT']]},
-'Delay & RCA':{title:'Delay & root cause analysis',kpis:['Delayed Shipments','Delay %','Average Delay Days','Maximum Delay','Cost Due to Delays','Most Common Root Cause'],charts:[['Pareto — delay reasons','Delay_Reason','Shipment_ID'],['Delay trend','Delay_Days','month'],['Root cause distribution','Delay_Reason','Shipment_ID'],['Delay by supplier','Supplier','Delay_Days'],['Delay by port','Port','Delay_Days'],['Financial impact','Delay_Reason','Detention_Cost']]},
-'Vendor / Supplier Analytics':{title:'Supplier reliability & risk',kpis:['Active Suppliers','Shipments','Shipment Value','On-Time Dispatch %','Average Delay','Documentation Accuracy','Freight Cost','Issue Count'],charts:[['Supplier shipments','Supplier','Shipment_ID'],['Supplier value','Supplier','Shipment_Value'],['Supplier delays','Supplier','Delay_Days'],['Country footprint','Origin_Country','Shipment_ID'],['Documentation issues','Supplier','Delay_Days'],['Freight cost','Supplier','Freight_Cost']]}
+const ICONS = [
+  LayoutDashboard,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  FileCheck2,
+  Truck,
+  Handshake,
+  TriangleAlert,
+  Factory,
+  RadioTower,
+  Database,
+];
+const COLORS = [
+  "#a50034",
+  "#187d91",
+  "#e4ae40",
+  "#4266b0",
+  "#7b8993",
+  "#cf6654",
+  "#56846b",
+  "#926388",
+  "#699da5",
+  "#b69a60",
+];
+const compact = (n) =>
+  n === null || n === undefined
+    ? "N/A"
+    : new Intl.NumberFormat("en-IN", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(n);
+const money = (n) =>
+  n === null || n === undefined ? "N/A" : `INR ${compact(n)}`;
+const count = (n) => (n ?? 0).toLocaleString("en-IN");
+const decimal = (n, suffix = "") =>
+  n === null || n === undefined ? "N/A" : `${n.toFixed(1)}${suffix}`;
+const percent = (n) => decimal(n, "%");
+const title = (k) => k.replaceAll("_", " ");
+const metricFormats = {
+  count: compact,
+  Import: compact,
+  Export: compact,
+  value: money,
+  freight: money,
+  duty: money,
+  costPerKg: (n) => (n === null ? "N/A" : `INR ${n.toFixed(2)}/kg`),
+  variance: percent,
+  onTimePct: percent,
+  dispatchPct: percent,
+  slaPct: percent,
+  otdPct: percent,
+  delayPct: percent,
+  avgTat: (n) => decimal(n, " d"),
+  avgLead: (n) => decimal(n, " d"),
+  avgDelay: (n) => decimal(n, " d"),
+  delayed: compact,
+  exceptions: compact,
+  pending: compact,
+  cumulative: percent,
 };
-function kpisFor(c,d){const delayed=d.filter(x=>x.Delay_Days>0),map={'Total Import Value':fmtINR(sum(d,'Shipment_Value')),'Import Shipments':d.length.toLocaleString(),'In-Transit Shipments':d.filter(x=>x.Shipment_Status==='In Transit').length.toLocaleString(),'Customs Pending':d.filter(x=>x.Shipment_Status==='Customs Pending').length.toLocaleString(),'Delayed Imports':delayed.length.toLocaleString(),'Avg Clearance TAT':avg(d,'Clearance_TAT').toFixed(1)+' days','Import Freight Cost':fmtINR(sum(d,'Freight_Cost')),'Cost per Shipment':fmtINR(sum(d,'Freight_Cost')/d.length),'Export Value':fmtINR(sum(d,'Shipment_Value')),'Export Shipments':d.length.toLocaleString(),'Pending Exports':d.filter(x=>x.Shipment_Status!=='Cleared').length.toLocaleString(),'On-Time Dispatch %':(100-delayed.length/d.length*100).toFixed(1)+'%','Delayed Exports':delayed.length.toLocaleString(),'Avg Documentation TAT':'1.8 days','Avg Shipment TAT':avg(d,'Clearance_TAT').toFixed(1)+' days','Export Freight Cost':fmtINR(sum(d,'Freight_Cost')),'BOE Filed':d.filter(x=>x.BOE_Number!=='—').length.toLocaleString(),'BOE Pending':d.filter(x=>x.Customs_Status==='Pending').length.toLocaleString(),'Clearance Within SLA %':(d.filter(x=>x.Clearance_TAT<=3).length/d.length*100).toFixed(1)+'%','Duty Paid':fmtINR(sum(d,'Customs_Duty')),'Documentation Issues':d.filter(x=>x.Delay_Reason==='Documentation Issue').length.toLocaleString(),'Total Freight Cost':fmtINR(sum(d,'Freight_Cost')),'Air Freight':fmtINR(sum(d.filter(x=>x.Mode==='Air'),'Freight_Cost')),'Sea Freight':fmtINR(sum(d.filter(x=>x.Mode==='Sea'),'Freight_Cost')),'Customs Duty':fmtINR(sum(d,'Customs_Duty')),'CHA Charges':fmtINR(sum(d,'CHA_Charges')),'Detention & Demurrage':fmtINR(sum(d,'Detention_Cost')+sum(d,'Demurrage_Cost')),'Freight as % of Value':(sum(d,'Freight_Cost')/sum(d,'Shipment_Value')*100).toFixed(1)+'%','Total Shipments':d.length.toLocaleString(),'On-Time %':(100-delayed.length/d.length*100).toFixed(1)+'%','Average Clearance TAT':avg(d,'Clearance_TAT').toFixed(1)+' days','Documentation Accuracy':(100-d.filter(x=>x.Delay_Reason==='Documentation Issue').length/d.length*100).toFixed(1)+'%','Delayed Shipments':delayed.length.toLocaleString(),'Average Freight Cost':fmtINR(avg(d,'Freight_Cost')),'Detention Cases':d.filter(x=>x.Detention_Cost>0).length.toLocaleString(),'SLA Compliance %':(d.filter(x=>x.Clearance_TAT<=3).length/d.length*100).toFixed(1)+'%','Delay %':(delayed.length/d.length*100).toFixed(1)+'%','Average Delay Days':avg(delayed,'Delay_Days').toFixed(1),'Maximum Delay':Math.max(...d.map(x=>x.Delay_Days))+' days','Cost Due to Delays':fmtINR(sum(d,'Detention_Cost')+sum(d,'Demurrage_Cost')),'Most Common Root Cause':group(delayed,'Delay_Reason', 'Shipment_ID',1)[0]?.name||'—','Active Suppliers':new Set(d.map(x=>x.Supplier)).size,'Shipments':d.length.toLocaleString(),'Shipment Value':fmtINR(sum(d,'Shipment_Value')),'Average Delay':avg(delayed,'Delay_Days').toFixed(1)+' days','Freight Cost':fmtINR(sum(d,'Freight_Cost')),'Issue Count':delayed.length.toLocaleString()};return c.kpis.map((label,i)=>kpi(label,map[label]??'—',i%3?2.4:-1.7,i%4!==0))}
-function AnalysisPage({name,data,onOpen}){let c=PAGECFG[name],d=c.flow?data.filter(x=>x.Shipment_Type===c.flow):data;if(!d.length)return <Empty/>;let delayed=d.filter(x=>x.Delay_Days>0);return <><div className="page-intro"><div><span className="eyebrow">ANALYTICS WORKSPACE</span><h2>{c.title}</h2><p>Performance, trends and exceptions from {d.length.toLocaleString()} filtered shipments.</p></div><div className="updated"><Clock3/> Updated just now</div></div><div className="kpi-grid">{kpisFor(c,d).map((x,i)=><KPI x={x} key={i}/>)}</div>{name==='Freight & Cost Analytics'&&<Opportunity d={d}/>} {name==='Delay & RCA'&&<RcaInsight d={d}/>}<div className="charts-grid">{c.charts.map(([title,key,kind],i)=><ChartCard key={title} title={title} sub={moneyKeys.has(key)?'Cost and value contribution':'Operational distribution'} wide={i===0}>{kind==='month'?<LineVisual data={months(d,key)} money={moneyKeys.has(key)}/>:kind==='aging'?<BarVisual data={aging(d)}/>:<BarVisual data={group(key==='Delay_Reason'?delayed:d,key,key==='Clearance_TAT'?'Shipment_ID':key,7)} money={moneyKeys.has(key)} horizontal={i%2===1}/>}</ChartCard>)}</div><Ranking name={name} data={d} onOpen={onOpen}/></>}
-function aging(d){let b={'0–1 Day':0,'2–3 Days':0,'4–5 Days':0,'6–7 Days':0,'> 7 Days':0};d.forEach(x=>{let v=x.Clearance_TAT;b[v<=1?'0–1 Day':v<=3?'2–3 Days':v<=5?'4–5 Days':v<=7?'6–7 Days':'> 7 Days']++});return Object.entries(b).map(([name,value])=>({name,value}))}
-function Opportunity({d}){let a=avg(d.filter(x=>x.Mode==='Air'),'Freight_Cost'),s=avg(d.filter(x=>x.Mode==='Sea'),'Freight_Cost');return <div className="opportunity"><div><IndianRupee/><span><b>Potential savings opportunity</b><small>Delhi Air route cost is {Math.max(8,Math.round(a/Math.max(s,1)))}% above comparable route benchmark.</small></span></div><button>Review routes <ArrowUpRight/></button></div>}
-function RcaInsight({d}){let delayed=d.filter(x=>x.Delay_Days>0),top=group(delayed,'Delay_Reason')[0];return <div className="opportunity"><div><TriangleAlert/><span><b>Automated root-cause insight</b><small>{Math.round(top.value/delayed.length*100)}% of delays are linked to {top.name.toLowerCase()}. This is the leading avoidable driver.</small></span></div><button>Open cases <ArrowUpRight/></button></div>}
-function Ranking({name,data,onOpen}){if(name.includes('Supplier')||name.includes('CHA')){let key=name.includes('Supplier')?'Supplier':'CHA',rows=group(data,key,'Shipment_ID',8);return <div className="table-card"><div className="cardhead"><div><h3>{key} performance ranking</h3><p>Composite score based on SLA, delay and cost</p></div></div><table><thead><tr><th>Rank</th><th>{key}</th><th>Shipments</th><th>On-time</th><th>Avg TAT</th><th>Score</th></tr></thead><tbody>{rows.map((r,i)=><tr key={r.name}><td>#{i+1}</td><td><b>{r.name}</b></td><td>{r.value}</td><td>{(96-i*1.7).toFixed(1)}%</td><td>{(2.3+i*.28).toFixed(1)} days</td><td><span className="score">{Math.round(94-i*4)}</span></td></tr>)}</tbody></table></div>}return <ExceptionTable data={data.filter(x=>x.Risk_Status!=='On Track').slice(0,6)} onOpen={onOpen} title="Detailed operational exceptions"/>}
-function ControlTower({data,onOpen}){const[quick,setQuick]=useState('All');let d=data.filter(x=>quick==='All'||quick==='Delayed'&&x.Delay_Days>0||quick==='Customs Pending'&&x.Shipment_Status==='Customs Pending'||quick==='Documentation Pending'&&x.Shipment_Status==='Documentation Pending'||quick==='High Value'&&x.Shipment_Value>150000||quick==='High Risk'&&x.Risk_Status==='Critical'||quick==='Arriving Today'&&x.ETA==='2026-10-06'||quick==='Next 3 Days'&&x.ETA>='2026-10-06'&&x.ETA<='2026-10-09').slice(0,100);return <><div className="page-intro"><div><span className="eyebrow">LIVE OPERATIONS</span><h2>Shipment control tower</h2><p>Monitor movement, milestones, risk and intervention needs.</p></div><div className="control-kpis"><span><i className="green"/>{data.filter(x=>x.Risk_Status==='On Track').length.toLocaleString()} on track</span><span><i className="amber"/>{data.filter(x=>x.Risk_Status==='Attention').length.toLocaleString()} attention</span><span><i className="red"/>{data.filter(x=>x.Risk_Status==='Critical').length.toLocaleString()} critical</span></div></div><div className="quickfilters">{['All','Delayed','Arriving Today','Next 3 Days','Customs Pending','Documentation Pending','High Value','High Risk'].map(x=><button className={quick===x?'active':''} onClick={()=>setQuick(x)} key={x}>{x}</button>)}</div><div className="table-card control"><div className="cardhead"><div><h3>Active shipment register</h3><p>Showing {d.length} priority records</p></div><button className="btn"><Columns3/> Columns</button></div><div className="table-scroll"><table><thead><tr>{['Shipment ID','Flow','Supplier / Customer','Origin','Destination','Port','Mode','BL / AWB','ETD','ETA','Customs','CHA','Forwarder','Stage','Delay','Value','Freight','Risk'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{d.map(s=><tr key={s.Shipment_ID}><td className="stickycol"><button className="link" onClick={()=>onOpen(s)}>{s.Shipment_ID}</button></td><td>{s.Shipment_Type}</td><td>{s.Shipment_Type==='Import'?s.Supplier:s.Customer}</td><td>{s.Origin_Country}</td><td>{s.Destination_Country}</td><td>{s.Port}</td><td><span className="mode">{s.Mode==='Air'?<Plane/>:<Anchor/>}{s.Mode}</span></td><td>{s.BL_AWB}</td><td>{s.ETD}</td><td>{s.ETA}</td><td>{s.Customs_Status}</td><td>{s.CHA}</td><td>{s.Freight_Forwarder}</td><td>{s.Current_Stage}</td><td>{s.Delay_Days}d</td><td>{fmtINR(s.Shipment_Value)}</td><td>{fmtINR(s.Freight_Cost)}</td><td><Risk r={s.Risk_Status}/></td></tr>)}</tbody></table></div></div></>}
-const ALLCOLS=['Shipment_ID','Shipment_Type','PO_Number','Invoice_Number','Supplier','Customer','Origin_Country','Destination_Country','Origin_Port','Destination_Port','Mode','BL_AWB','Container_Number','Material_Category','HS_Code','Incoterm','ETD','ETA','Actual_Arrival','BOE_Number','BOE_Date','Shipping_Bill','Customs_Status','CHA','Freight_Forwarder','Shipment_Value','Freight_Cost','Customs_Duty','CHA_Charges','Detention_Cost','Demurrage_Cost','Clearance_Date','Clearance_TAT','Factory_Delivery_Date','Shipment_Status','Delay_Days','Delay_Reason','Risk_Status'];
-function DataExplorer({data,download,onOpen}){const[q,setQ]=useState(''),[page,setPage]=useState(1),[cols,setCols]=useState(ALLCOLS.slice(0,14).concat(['Shipment_Status','Delay_Days','Risk_Status'])),[showCols,setShowCols]=useState(false),[sort,setSort]=useState(['ETD','desc']);let filtered=useMemo(()=>{let d=q?data.filter(x=>Object.values(x).some(v=>String(v).toLowerCase().includes(q.toLowerCase()))):data;return [...d].sort((a,b)=>String(a[sort[0]]).localeCompare(String(b[sort[0]]))*(sort[1]==='asc'?1:-1))},[data,q,sort]);let pages=Math.ceil(filtered.length/100),rows=filtered.slice((page-1)*100,page*100);const toggle=c=>setCols(s=>s.includes(c)?s.filter(x=>x!==c):[...s,c]);return <><div className="page-intro"><div><span className="eyebrow">DATA WORKSPACE</span><h2>Complete shipment dataset</h2><p>Search, inspect and export 50,000 operational records.</p></div><div className="exportgroup"><button onClick={()=>download(filtered,'csv','LG-EXIM-filtered')}>CSV</button><button onClick={()=>download(filtered,'xlsx','LG-EXIM-filtered')}>Excel</button><button onClick={()=>download(filtered,'json','LG-EXIM-filtered')}>JSON</button></div></div><div className="data-toolbar"><div className="search"><Search/><input placeholder="Search shipment, supplier, BL / AWB, port…" value={q} onChange={e=>{setQ(e.target.value);setPage(1)}}/></div><button className="btn"><Filter/>Advanced filters</button><div className="colpicker"><button className="btn" onClick={()=>setShowCols(!showCols)}><Columns3/> Columns ({cols.length})</button>{showCols&&<div className="colmenu"><b>Select columns</b>{ALLCOLS.map(c=><label key={c}><input type="checkbox" checked={cols.includes(c)} onChange={()=>toggle(c)}/>{c.replaceAll('_',' ')}</label>)}</div>}</div><button className="btn" onClick={()=>download(filtered,'xlsx','LG-EXIM-complete-dataset')}><Download/>Export {filtered.length.toLocaleString()}</button></div><div className="table-card data-table"><div className="table-scroll"><table><thead><tr>{cols.map(c=><th key={c} onClick={()=>setSort([c,sort[0]===c&&sort[1]==='asc'?'desc':'asc'])}>{c.replaceAll('_',' ')} {sort[0]===c&&(sort[1]==='asc'?'↑':'↓')}<i className="resize"/></th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.Shipment_ID}>{cols.map((c,i)=><td key={c} className={i===0?'stickycol':''}>{c==='Shipment_ID'?<button className="link" onClick={()=>onOpen(r)}>{r[c]}</button>:c==='Risk_Status'?<Risk r={r[c]}/>:moneyKeys.has(c)?fmtINR(r[c]):String(r[c])}</td>)}</tr>)}</tbody></table></div><div className="pagination"><span>Showing {((page-1)*100+1).toLocaleString()}–{Math.min(page*100,filtered.length).toLocaleString()} of {filtered.length.toLocaleString()} records</span><div><button disabled={page===1} onClick={()=>setPage(p=>p-1)}>Previous</button><span>Page {page} of {pages}</span><button disabled={page===pages} onClick={()=>setPage(p=>p+1)}>Next</button></div></div></div></>}
-const reports=[['Daily EXIM Report','Today’s arrivals, clearances and exceptions','daily'],['Weekly Shipment Report','7-day movement and SLA summary','weekly'],['Monthly EXIM Performance','Executive trade and cost performance','monthly'],['Delayed Shipment Report','Open delays, RCA and financial impact','delay'],['Customs Pending Report','BOE aging and customs status','customs'],['Freight Cost Report','Route, mode and forwarder cost','freight'],['CHA Performance Report','CHA scorecard and SLA compliance','cha'],['Supplier Performance Report','Dispatch and documentation reliability','supplier'],['Management Summary','One-page leadership briefing','management']];
-function Reports({data,download}){const pdf=(r)=>{let doc=new jsPDF();doc.setTextColor(165,0,52);doc.setFontSize(20);doc.text('LG EXIM Intelligence',18,22);doc.setTextColor(30);doc.setFontSize(15);doc.text(r[0],18,35);doc.setFontSize(10);doc.text(`Generated: 06 October 2026 | Filtered shipments: ${data.length.toLocaleString()}`,18,45);doc.text(`Shipment value: ${fmtINR(sum(data,'Shipment_Value'))}`,18,58);doc.text(`Freight cost: ${fmtINR(sum(data,'Freight_Cost'))}`,18,67);doc.text(`Delayed shipments: ${data.filter(x=>x.Delay_Days>0).length.toLocaleString()}`,18,76);doc.text('This report reflects active global filters in LG EXIM Intelligence.',18,92);doc.save(r[2]+'.pdf')};return <><div className="page-intro"><div><span className="eyebrow">REPORT CENTER</span><h2>Reports & downloads</h2><p>Audit-ready operational reports using the active global filter set.</p></div><span className="records">{data.length.toLocaleString()} records in scope</span></div><div className="reports-grid">{reports.map((r,i)=><div className="report-card" key={r[0]}><div className="report-icon">{i%3===0?<FileText/>:<FileSpreadsheet/>}</div><div><h3>{r[0]}</h3><p>{r[1]}</p><span>Last generated · {i+1} day{i?'s':''} ago</span></div><div className="report-actions"><button onClick={()=>pdf(r)}>PDF</button><button onClick={()=>download(data,'xlsx',r[2])}>Excel</button><button onClick={()=>download(data,'csv',r[2])}>CSV</button></div></div>)}</div></>}
-function ShipmentDrawer({s,close}){const steps=['PO Created','Supplier Dispatch','Origin Port','Vessel Departure','Destination Port','Customs','Factory Delivery'];let done=s.Current_Stage==='Closed'?7:Math.max(2,steps.indexOf(s.Current_Stage)+1);return <><div className="drawer-shade" onClick={close}/><aside className="drawer"><div className="drawerhead"><div><span>SHIPMENT DETAIL</span><h2>{s.Shipment_ID}</h2></div><button onClick={close}><X/></button></div><div className="drawerbody"><div className="drawer-summary"><Risk r={s.Risk_Status}/><h3>{s.Origin_Country} <span>→</span> {s.Destination_Country}</h3><p>{s.Mode} · {s.BL_AWB} · {s.Incoterm}</p></div><div className="timeline">{steps.map((x,i)=><div className={i<done?'done':i===done?'current':''} key={x}><i>{i<done?<CheckCircle2/>:<span/>}</i><div><b>{x}</b><small>{i<done?(i===0?s.ETD:s.ETA):'Pending milestone'}</small></div></div>)}</div><h3 className="drawer-section">Commercial & operational detail</h3><div className="detail-grid">{[['Supplier',s.Supplier],['Customer',s.Customer],['Material',s.Material_Category],['HS Code',s.HS_Code],['Port',s.Port],['CHA',s.CHA],['Forwarder',s.Freight_Forwarder],['Customs',s.Customs_Status],['Shipment value',fmtINR(s.Shipment_Value)],['Freight cost',fmtINR(s.Freight_Cost)],['Customs duty',fmtINR(s.Customs_Duty)],['Clearance TAT',s.Clearance_TAT+' days']].map(x=><div key={x[0]}><span>{x[0]}</span><b>{x[1]}</b></div>)}</div>{s.Delay_Days>0&&<div className="delaybox"><AlertCircle/><div><b>{s.Delay_Days}-day delay · {s.Delay_Reason}</b><p>Estimated delay-related cost: {fmtINR(s.Detention_Cost+s.Demurrage_Cost)}</p></div></div>}</div><div className="drawerfoot"><button className="btn">Download details</button><button className="btn primary">Create action</button></div></aside></>}
-createRoot(document.getElementById('root')).render(<App/>);
+const M = {
+  count: "Shipment records",
+  value: "Trade value",
+  freight: "Freight cost",
+  duty: "Customs duty",
+  costPerKg: "Freight / kg",
+  variance: "Variance vs mode",
+  onTimePct: "On-time arrival",
+  dispatchPct: "On-time dispatch",
+  slaPct: "SLA compliance",
+  otdPct: "Supplier OTD",
+  delayPct: "Delay rate",
+  avgTat: "Clearance TAT",
+  avgLead: "Arrival lead time",
+  avgDelay: "Delay days",
+  delayed: "Delayed records",
+  exceptions: "Exceptions",
+  pending: "Pending customs",
+  Import: "Import",
+  Export: "Export",
+  cumulative: "Cumulative share",
+};
+const notes = {
+  onTimePct:
+    "Actual arrival on or before ETA / records with actual arrival and ETA. Future actual arrivals excluded.",
+  avgTat:
+    "Average Clearance TAT for records cleared by the source as-of date; pending records excluded.",
+  avgLead:
+    "Actual arrival minus ETD, averaged over arrived records with valid dates.",
+  dispatchPct:
+    "Actual Dispatch Date on or before ETD / records with actual dispatch and ETD.",
+  otdPct:
+    "Factory Delivery Date on or before Planned Delivery Date / delivered records with both dates.",
+  slaPct:
+    "Clearance TAT <= record-level SLA Days / cleared records with positive SLA Days.",
+  costPerKg:
+    "Sum of freight / sum of weight, using only records with freight and positive weight.",
+  variance:
+    "Lane freight per kg compared with the weighted freight per kg for the same transport mode. This is a descriptive comparison, not a savings estimate.",
+  pending:
+    "Import records with BOE Date on/before the as-of date and no clearance by that date.",
+  count:
+    "One source row is treated as one shipment record. CSV must use one row per shipment.",
+};
+
+function Chart({ heading, description, children, wide = false }) {
+  return (
+    <section className={`chart-panel ${wide ? "wide" : ""}`}>
+      <div className="chart-heading">
+        <h3>{heading}</h3>
+        {description && (
+          <span title={description} aria-label={description}>
+            <Info size={14} />
+          </span>
+        )}
+      </div>
+      <div className="plot">{children}</div>
+    </section>
+  );
+}
+function Missing({ fields }) {
+  return (
+    <div className="missing">
+      <Database size={24} />
+      <strong>Measurement unavailable</strong>
+      <span>Required: {fields.join(", ")}</span>
+    </div>
+  );
+}
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="chart-tooltip">
+      <b>{label || payload[0]?.payload?.name}</b>
+      {payload
+        .filter((p) => p.value !== null && p.value !== undefined)
+        .map((p, i) => (
+          <div key={i}>
+            <i style={{ background: p.color || p.fill }} />
+            <span>{p.name}</span>
+            <strong>{(metricFormats[p.dataKey] || compact)(p.value)}</strong>
+          </div>
+        ))}
+    </div>
+  );
+}
+function Bars({
+  rows,
+  metric = "count",
+  limit = 10,
+  color = COLORS[1],
+  reference,
+}) {
+  const data = rows
+    .filter((r) => r[metric] !== null && r[metric] !== undefined)
+    .sort((a, b) =>
+      metric === "variance"
+        ? Math.abs(b[metric]) - Math.abs(a[metric])
+        : b[metric] - a[metric],
+    )
+    .slice(0, limit);
+  if (!data.length) return <Missing fields={[M[metric] || metric]} />;
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ left: 0, right: 26, top: 8, bottom: 8 }}
+      >
+        <CartesianGrid horizontal={false} stroke="#edf0f2" />
+        <XAxis
+          type="number"
+          tickFormatter={metricFormats[metric] || compact}
+          tick={{ fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          domain={
+            metric.endsWith("Pct")
+              ? [0, 100]
+              : metric === "variance"
+                ? ["auto", "auto"]
+                : undefined
+          }
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={132}
+          tick={{ fontSize: 10 }}
+          tickFormatter={(s) => (s.length > 23 ? s.slice(0, 21) + "..." : s)}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip content={<ChartTooltip />} />
+        {(reference !== undefined || metric === "variance") && (
+          <ReferenceLine x={reference ?? 0} stroke="#b6bdc4" />
+        )}
+        <Bar
+          dataKey={metric}
+          name={M[metric]}
+          fill={color}
+          barSize={15}
+          radius={[0, 2, 2, 0]}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+function Trend({ rows, metrics = ["count"], area = false }) {
+  if (
+    !rows.some((r) => metrics.some((m) => r[m] !== null && r[m] !== undefined))
+  )
+    return <Missing fields={metrics.map((m) => M[m] || m)} />;
+  const Container = area ? AreaChart : LineChart;
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <Container
+        data={rows}
+        margin={{ top: 12, right: 16, left: 0, bottom: 0 }}
+      >
+        <CartesianGrid vertical={false} stroke="#edf0f2" />
+        <XAxis
+          dataKey="name"
+          tickFormatter={(s) =>
+            new Date(s + "-01T00:00:00").toLocaleDateString("en-US", {
+              month: "short",
+              year: "2-digit",
+            })
+          }
+          tick={{ fontSize: 10 }}
+          minTickGap={25}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          tickFormatter={metricFormats[metrics[0]] || compact}
+          tick={{ fontSize: 10 }}
+          width={68}
+          axisLine={false}
+          tickLine={false}
+          domain={metrics[0].endsWith("Pct") ? [0, 100] : undefined}
+        />
+        <Tooltip content={<ChartTooltip />} />
+        <Legend
+          iconType="circle"
+          iconSize={7}
+          wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+        />
+        {metrics.map((m, i) =>
+          area ? (
+            <Area
+              key={m}
+              type="linear"
+              dataKey={m}
+              name={M[m]}
+              stroke={COLORS[i]}
+              fill={COLORS[i]}
+              fillOpacity={0.08}
+              strokeWidth={2}
+              isAnimationActive={false}
+            />
+          ) : (
+            <Line
+              key={m}
+              type="linear"
+              dataKey={m}
+              name={M[m]}
+              stroke={COLORS[i]}
+              strokeWidth={2}
+              dot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          ),
+        )}
+      </Container>
+    </ResponsiveContainer>
+  );
+}
+function Donut({ rows, metric = "count" }) {
+  if (!rows.length) return <Missing fields={[M[metric]]} />;
+  return (
+    <div className="donut-layout">
+      <div className="donut">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={rows}
+              dataKey={metric}
+              nameKey="name"
+              innerRadius="60%"
+              outerRadius="85%"
+              paddingAngle={1}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              {rows.map((r, i) => (
+                <Cell key={r.name} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(v) => (metricFormats[metric] || compact)(v)} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="donut-legend">
+        {rows.map((r, i) => (
+          <div key={r.name}>
+            <i style={{ background: COLORS[i % COLORS.length] }} />
+            <span title={r.name}>{r.name}</span>
+            <b>{compact(r[metric])}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function Pareto({ rows }) {
+  return rows.length ? (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart
+        data={rows}
+        margin={{ top: 10, left: 0, right: 5, bottom: 38 }}
+      >
+        <CartesianGrid vertical={false} stroke="#edf0f2" />
+        <XAxis
+          dataKey="name"
+          interval={0}
+          angle={-30}
+          textAnchor="end"
+          tick={{ fontSize: 9 }}
+          tickFormatter={(s) => s.replace("Freight Forwarder", "Forwarder")}
+          height={50}
+        />
+        <YAxis
+          yAxisId="count"
+          tickFormatter={compact}
+          tick={{ fontSize: 10 }}
+          width={45}
+        />
+        <YAxis
+          yAxisId="percent"
+          orientation="right"
+          domain={[0, 100]}
+          tickFormatter={(v) => `${v}%`}
+          tick={{ fontSize: 10 }}
+          width={40}
+        />
+        <Tooltip content={<ChartTooltip />} />
+        <Bar
+          yAxisId="count"
+          dataKey="count"
+          name="Delayed records"
+          fill={COLORS[0]}
+        />
+        <Line
+          yAxisId="percent"
+          dataKey="cumulative"
+          name="Cumulative share"
+          stroke={COLORS[1]}
+          dot={false}
+          strokeWidth={2}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  ) : (
+    <div className="missing">No delayed records in scope</div>
+  );
+}
+function Metric({ label, value, note, accent = false }) {
+  return (
+    <div className={`metric ${accent ? "accent" : ""}`}>
+      <span>
+        {label}
+        {note && <Info size={12} tabIndex={0} title={note} />}
+      </span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+function Summary({ view, data }) {
+  const t = data.total,
+    g = data.groups,
+    imports = g.Shipment_Type.find((r) => r.name === "Import"),
+    exports = g.Shipment_Type.find((r) => r.name === "Export");
+  const common = [
+    ["Shipment records", count(t.count), notes.count],
+    ["Trade value", t.valueN ? money(t.value) : "N/A"],
+    ["On-time arrival", percent(t.onTimePct), notes.onTimePct],
+    ["Delayed records", count(t.delayed), "Source Delay Days > 0."],
+    ["Freight cost", t.freightN ? money(t.freight) : "N/A"],
+    ["Arrival lead time", decimal(t.avgLead, " days"), notes.avgLead],
+  ];
+  const specific = {
+    Executive: [
+      common[0],
+      ["Import value", imports?.valueN ? money(imports.value) : "N/A"],
+      ["Export value", exports?.valueN ? money(exports.value) : "N/A"],
+      common[2],
+      common[3],
+      common[4],
+    ],
+    Import: common,
+    Export: [
+      common[0],
+      common[1],
+      ["On-time dispatch", percent(t.dispatchPct), notes.dispatchPct],
+      common[2],
+      common[3],
+      common[4],
+    ],
+    Customs: [
+      common[0],
+      [
+        "Cleared records",
+        count(t.cleared),
+        "Clearance Date on/before the source as-of date.",
+      ],
+      ["Clearance TAT", decimal(t.avgTat, " days"), notes.avgTat],
+      ["Pending customs", count(t.pending), notes.pending],
+      ["Customs duty", t.dutyN ? money(t.duty) : "N/A"],
+      ["SLA compliance", percent(t.slaPct), notes.slaPct],
+    ],
+    Freight: [
+      common[0],
+      common[4],
+      ["Freight / kg", metricFormats.costPerKg(t.costPerKg), notes.costPerKg],
+      [
+        "Avg freight / record",
+        t.freightN ? money(t.freight / t.freightN) : "N/A",
+      ],
+      ["Freight coverage", `${count(t.freightN)} records`],
+      ["Weight coverage", `${count(t.weightN)} records`],
+    ],
+    "CHA / Forwarder": [
+      common[0],
+      ["SLA compliance", percent(t.slaPct), notes.slaPct],
+      common[2],
+      ["Clearance TAT", decimal(t.avgTat, " days"), notes.avgTat],
+      ["Exception records", count(t.exceptions)],
+      common[4],
+    ],
+    "Delay & RCA": [
+      common[0],
+      common[3],
+      [
+        "Delay rate",
+        percent(t.delayPct),
+        "Records with Delay Days > 0 / filtered records with numeric Delay Days.",
+      ],
+      [
+        "Critical risk",
+        count(g.Risk_Status.find((r) => r.name === "Critical")?.count),
+      ],
+      [
+        "Average delay",
+        decimal(t.avgDelay, " days"),
+        "Average source Delay Days over records with a numeric value, including zero.",
+      ],
+      ["Exception records", count(t.exceptions)],
+    ],
+    Supplier: [
+      common[0],
+      ["Supplier OTD", percent(t.otdPct), notes.otdPct],
+      common[5],
+      common[2],
+      ["Supplier count", count(g.Supplier.length)],
+      common[3],
+    ],
+    "Control Tower": [
+      common[0],
+      [
+        "Critical risk",
+        count(g.Risk_Status.find((r) => r.name === "Critical")?.count),
+      ],
+      common[3],
+      ["Pending customs", count(t.pending), notes.pending],
+      ["Exception trade value", t.valueN ? money(t.value) : "N/A"],
+      common[4],
+    ],
+  };
+  const requiredLabels = {
+    "Delayed records": ["Delay_Days"],
+    "Critical risk": ["Risk_Status"],
+    "Cleared records": ["Clearance_Date"],
+    "Pending customs": ["BOE_Date", "Clearance_Date"],
+    "Supplier count": ["Supplier"],
+  };
+  return (
+    <div className="metrics">
+      {(specific[view] || common).map(([label, value, note], i) => (
+        <Metric
+          key={label}
+          label={label}
+          value={
+            (requiredLabels[label] || []).some(
+              (field) => !data.source.fields.includes(field),
+            ) ||
+            (label === "Delayed records" && !t.delayN)
+              ? "N/A"
+              : value
+          }
+          note={note}
+          accent={i === 0}
+        />
+      ))}
+    </div>
+  );
+}
+function Analytics({ view, data }) {
+  const g = data.groups,
+    m = data.monthly;
+  const required = {
+    value: ["Shipment_Value"],
+    freight: ["Freight_Cost"],
+    duty: ["Customs_Duty"],
+    costPerKg: ["Freight_Cost", "Weight_KG"],
+    variance: ["Freight_Cost", "Weight_KG", "Mode"],
+    onTimePct: ["Actual_Arrival", "ETA"],
+    dispatchPct: ["Actual_Dispatch_Date", "ETD"],
+    otdPct: ["Factory_Delivery_Date", "Planned_Delivery_Date"],
+    slaPct: ["SLA_Days", "Clearance_Date", "Clearance_TAT"],
+    avgTat: ["Clearance_Date", "Clearance_TAT"],
+    avgLead: ["Actual_Arrival", "ETD"],
+    avgDelay: ["Delay_Days"],
+    delayed: ["Delay_Days"],
+    delayPct: ["Delay_Days"],
+  };
+  const unavailable = (keys) =>
+    keys.filter((k) => !data.source.fields.includes(k));
+  const bar = (
+    heading,
+    key,
+    metric = "count",
+    description = notes[metric],
+    color,
+  ) => ({
+    heading,
+    description,
+    node: unavailable([
+      ...(key === "Lane"
+        ? ["Origin_Country", "Destination_Country", "Mode"]
+        : [key]),
+      ...(required[metric] || []),
+    ]).length ? (
+      <Missing
+        fields={unavailable([
+          ...(key === "Lane"
+            ? ["Origin_Country", "Destination_Country", "Mode"]
+            : [key]),
+          ...(required[metric] || []),
+        ])}
+      />
+    ) : (
+      <Bars rows={g[key]} metric={metric} color={color} />
+    ),
+  });
+  const trend = (heading, metrics, description) => ({
+    heading,
+    description: `${description || "ETD month cohorts."} Boundary months may be partial.`,
+    node: unavailable(metrics.flatMap((metric) => required[metric] || []))
+      .length ? (
+      <Missing
+        fields={[
+          ...new Set(
+            unavailable(metrics.flatMap((metric) => required[metric] || [])),
+          ),
+        ]}
+      />
+    ) : (
+      <Trend rows={m} metrics={metrics} />
+    ),
+  });
+  const donut = (heading, key) => ({
+    heading,
+    node: unavailable([key]).length ? (
+      <Missing fields={[key]} />
+    ) : (
+      <Donut rows={g[key]} />
+    ),
+  });
+  const layouts = {
+    Executive: [
+      trend(
+        "Shipment trend",
+        ["Import", "Export"],
+        "Monthly records by ETD; entire selected period.",
+      ),
+      trend("Trade value trend", ["value"], "INR, grouped by ETD month."),
+      donut("Shipment status", "Shipment_Status"),
+      bar("Origin countries", "Origin_Country", "value"),
+      bar("Port throughput", "Port"),
+      donut("Material mix", "Material_Category"),
+    ],
+    Import: [
+      trend("Import value trend", ["value"]),
+      bar("Origin country value", "Origin_Country", "value"),
+      bar("Material value", "Material_Category", "value"),
+      bar("Port import value", "Port", "value"),
+      trend("Arrival lead time trend", ["avgLead"], notes.avgLead),
+      bar("Lead time by origin", "Origin_Country", "avgLead"),
+    ],
+    Export: [
+      trend("Export value trend", ["value"]),
+      bar("Destination value", "Destination_Country", "value"),
+      bar("Product value", "Material_Category", "value"),
+      trend("Dispatch performance", ["dispatchPct"], notes.dispatchPct),
+      bar(
+        "On-time dispatch by destination",
+        "Destination_Country",
+        "dispatchPct",
+      ),
+      donut("Export status", "Shipment_Status"),
+    ],
+    Customs: [
+      trend("Clearance TAT trend", ["avgTat"], notes.avgTat),
+      {
+        heading: "Pending BOE aging",
+        description:
+          "Days from BOE Date to source as-of date, for imports not yet cleared.",
+        node: unavailable(["BOE_Date", "Clearance_Date"]).length ? (
+          <Missing fields={unavailable(["BOE_Date", "Clearance_Date"])} />
+        ) : (
+          <Bars rows={data.aging} color={COLORS[2]} />
+        ),
+      },
+      donut("Customs status", "Customs_Status"),
+      bar("Clearance TAT by port", "Port", "avgTat"),
+      trend("Customs duty trend", ["duty"]),
+      bar("Customs duty by material", "Material_Category", "duty"),
+    ],
+    Freight: [
+      trend("Freight cost trend", ["freight"]),
+      bar("Total cost by mode", "Mode", "freight"),
+      bar("Forwarder freight cost", "Freight_Forwarder", "freight"),
+      bar("Cost per kg by mode", "Mode", "costPerKg"),
+      bar("Lane cost variance", "Lane", "variance", notes.variance, COLORS[3]),
+      bar("Lane freight cost", "Lane", "freight"),
+    ],
+    "CHA / Forwarder": [
+      bar("CHA SLA compliance", "CHA", "slaPct"),
+      bar("Forwarder on-time arrival", "Freight_Forwarder", "onTimePct"),
+      donut("CHA shipment share", "CHA"),
+      donut("Forwarder shipment share", "Freight_Forwarder"),
+      bar("CHA clearance TAT", "CHA", "avgTat"),
+      bar("Forwarder exceptions", "Freight_Forwarder", "exceptions"),
+    ],
+    "Delay & RCA": [
+      {
+        heading: "Delay reason Pareto",
+        description:
+          "Source-reported reasons for records with Delay Days > 0; cumulative share of all delayed records. Not proof of causality.",
+        node: <Pareto rows={data.pareto} />,
+      },
+      donut("Risk mix", "Risk_Status"),
+      trend("Delayed shipment trend", ["delayed"]),
+      bar("Delayed records by port", "Port", "delayed"),
+      bar("Average delay by port", "Port", "avgDelay"),
+      bar("Reported delay reasons", "Delay_Reason"),
+    ],
+    Supplier: [
+      bar("Supplier on-time delivery", "Supplier", "otdPct"),
+      bar("Supplier arrival lead time", "Supplier", "avgLead"),
+      donut("Supplier shipment share", "Supplier"),
+      bar(
+        "Supplier delay rate",
+        "Supplier",
+        "delayPct",
+        "Delayed records / all records per supplier.",
+      ),
+      bar("Supplier trade value", "Supplier", "value"),
+      bar("Supplier exception records", "Supplier", "exceptions"),
+    ],
+    "Control Tower": [
+      donut("Exception risk mix", "Risk_Status"),
+      bar("Exceptions by port", "Port"),
+      trend("Exception trend", ["count"]),
+      donut("Exception shipment status", "Shipment_Status"),
+    ],
+  };
+  return (
+    <div className={`charts ${view === "Control Tower" ? "tower-charts" : ""}`}>
+      {layouts[view]?.map((c) => (
+        <Chart key={c.heading} heading={c.heading} description={c.description}>
+          {c.node}
+        </Chart>
+      ))}
+    </div>
+  );
+}
+const DEFAULT_COLUMNS = [
+  "Shipment_ID",
+  "Shipment_Type",
+  "ETD",
+  "Origin_Country",
+  "Destination_Country",
+  "Port",
+  "Material_Category",
+  "Shipment_Status",
+  "Delay_Days",
+  "Delay_Reason",
+  "Risk_Status",
+  "Shipment_Value",
+  "Freight_Cost",
+];
+function Records({
+  data,
+  view,
+  page,
+  setPage,
+  columns,
+  setColumns,
+  search,
+  setSearch,
+  exportRows,
+  openRow,
+  busy,
+}) {
+  const [picker, setPicker] = useState(false);
+  const pages = Math.max(1, Math.ceil(data.matched / 50));
+  return (
+    <section className="records-section">
+      <div className="records-heading">
+        <div>
+          <h3>
+            {view === "Control Tower"
+              ? "Actual exception records"
+              : "Shipment record explorer"}
+          </h3>
+          <span>{count(data.matched)} matching records</span>
+        </div>
+        <div className="record-actions">
+          <label className="search">
+            <Search size={15} />
+            <input
+              aria-label="Search records"
+              placeholder="Shipment, supplier, port..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <div className="column-wrap">
+            <button
+              className="button"
+              onClick={() => setPicker(!picker)}
+              aria-expanded={picker}
+            >
+              <Columns3 size={15} />
+              Columns
+            </button>
+            {picker && (
+              <div className="column-picker">
+                <div>
+                  <strong>Visible columns</strong>
+                  <button
+                    className="icon-button"
+                    aria-label="Close column picker"
+                    onClick={() => setPicker(false)}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                {data.source.fields.map((c) => (
+                  <label key={c}>
+                    <input
+                      type="checkbox"
+                      checked={columns.includes(c)}
+                      onChange={() =>
+                        setColumns((cols) =>
+                          cols.includes(c)
+                            ? cols.length > 1
+                              ? cols.filter((x) => x !== c)
+                              : cols
+                            : [...cols, c],
+                        )
+                      }
+                    />
+                    {title(c)}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            className="button"
+            onClick={exportRows}
+            disabled={busy || !data.matched}
+          >
+            <Download size={15} />
+            CSV
+          </button>
+        </div>
+      </div>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              {columns.map((c) => (
+                <th key={c}>{title(c)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row, i) => (
+              <tr key={`${row.Shipment_ID}-${i}`}>
+                {columns.map((c, j) => (
+                  <td key={c} className={j === 0 ? "first-col" : ""}>
+                    {c === "Shipment_ID" ? (
+                      <button
+                        className="record-link"
+                        onClick={() => openRow(row)}
+                      >
+                        {row[c]}
+                      </button>
+                    ) : c === "Risk_Status" ? (
+                      <span
+                        className={`risk risk-${(row[c] || "").replaceAll(" ", "").toLowerCase()}`}
+                      >
+                        {row[c] || "N/A"}
+                      </span>
+                    ) : NUMBERS.has(c) ? (
+                      row[c] === null ||
+                      row[c] === undefined ||
+                      row[c] === "" ? (
+                        "N/A"
+                      ) : c.includes("Cost") ||
+                        c.includes("Value") ||
+                        c.includes("Duty") ||
+                        c.includes("Charges") ? (
+                        money(row[c])
+                      ) : (
+                        Number(row[c]).toLocaleString("en-IN", {
+                          maximumFractionDigits: 2,
+                        })
+                      )
+                    ) : (
+                      row[c] || "N/A"
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="pagination">
+        <span>
+          {data.matched ? count((page - 1) * 50 + 1) : 0} -{" "}
+          {count(Math.min(page * 50, data.matched))} of {count(data.matched)}
+        </span>
+        <div>
+          <button
+            className="icon-button"
+            title="Previous page"
+            disabled={page <= 1 || busy}
+            onClick={() => setPage(page - 1)}
+          >
+            <ChevronLeft size={17} />
+          </button>
+          <span>
+            Page {count(page)} / {count(pages)}
+          </span>
+          <button
+            className="icon-button"
+            title="Next page"
+            disabled={page >= pages || busy}
+            onClick={() => setPage(page + 1)}
+          >
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+function Source({ source, onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        className="source-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Dataset and definitions"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-heading">
+          <h2>Dataset & definitions</h2>
+          <button
+            className="icon-button"
+            aria-label="Close dataset details"
+            onClick={onClose}
+          >
+            <X />
+          </button>
+        </div>
+        <dl>
+          <dt>Source</dt>
+          <dd>{source.name}</dd>
+          <dt>Classification</dt>
+          <dd>{source.classification}</dd>
+          <dt>Records</dt>
+          <dd>{count(source.count)}</dd>
+          <dt>ETD coverage</dt>
+          <dd>
+            {source.minDate} to {source.maxDate}
+          </dd>
+          <dt>As-of date</dt>
+          <dd>{source.asOf}</dd>
+          <dt>Currency</dt>
+          <dd>INR; source values must be in INR</dd>
+          <dt>Grain</dt>
+          <dd>One source row per shipment; duplicates are not deduplicated</dd>
+          <dt>Missing numeric cells</dt>
+          <dd>Excluded from averages and sums; not replaced with zero</dd>
+          {source.invalid > 0 && (
+            <>
+              <dt>Invalid numeric cells</dt>
+              <dd>{count(source.invalid)} treated as missing</dd>
+            </>
+          )}
+        </dl>
+        <div className="definition-list">
+          {Object.entries(notes).map(([key, note]) => (
+            <p key={key}>
+              <b>{M[key]}:</b> {note}
+            </p>
+          ))}
+        </div>
+        {source.classification === "Synthetic" && (
+          <p className="source-note">
+            Generated sample records. Source statuses and milestone dates can
+            disagree; this is not verified operational data.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+function Detail({ row, onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <aside
+        className="detail-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Shipment details"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-heading">
+          <div>
+            <small>Shipment detail</small>
+            <h2>{row.Shipment_ID}</h2>
+          </div>
+          <button
+            className="icon-button"
+            aria-label="Close shipment details"
+            onClick={onClose}
+          >
+            <X />
+          </button>
+        </div>
+        <div className="route">
+          <strong>{row.Origin_Country || "N/A"}</strong>
+          <ArrowUpRight size={18} />
+          <strong>{row.Destination_Country || "N/A"}</strong>
+        </div>
+        <dl>
+          {Object.entries(row).map(([key, value]) => (
+            <React.Fragment key={key}>
+              <dt>{title(key)}</dt>
+              <dd>{value === null || value === "" ? "N/A" : String(value)}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      </aside>
+    </div>
+  );
+}
+function App() {
+  const worker = useRef(null),
+    request = useRef(0),
+    exports = useRef(new Map()),
+    fileInput = useRef(null);
+  const [view, setView] = useState("Executive"),
+    [filters, setFilters] = useState(DEFAULT_FILTERS),
+    [data, setData] = useState(null),
+    [source, setSource] = useState(null),
+    [busy, setBusy] = useState(true),
+    [importing, setImporting] = useState(false),
+    [exporting, setExporting] = useState(false),
+    [progress, setProgress] = useState(0),
+    [error, setError] = useState(""),
+    [more, setMore] = useState(false),
+    [page, setPage] = useState(1),
+    [columns, setColumns] = useState(DEFAULT_COLUMNS),
+    [detail, setDetail] = useState(null),
+    [showSource, setShowSource] = useState(false),
+    [mobileNav, setMobileNav] = useState(false),
+    [toast, setToast] = useState("");
+  useEffect(() => {
+    const w = new Worker(new URL("./data.worker.js", import.meta.url), {
+      type: "module",
+    });
+    worker.current = w;
+    w.onmessage = async ({ data: message }) => {
+      if (message.type === "ready") {
+        setSource(message.source);
+        setImporting(false);
+        setError("");
+        setData(null);
+        setFilters(DEFAULT_FILTERS);
+        setPage(1);
+        setColumns(
+          DEFAULT_COLUMNS.filter((c) => message.source.fields.includes(c)),
+        );
+      }
+      if (message.type === "result" && message.id === request.current) {
+        setData(message);
+        setBusy(false);
+      }
+      if (message.type === "progress") setProgress(message.count);
+      if (message.type === "error") {
+        if (typeof message.id === "number" && message.id !== request.current)
+          return;
+        setError(message.message);
+        setBusy(false);
+        setImporting(false);
+        setExporting(false);
+        const exp = exports.current.get(message.id);
+        if (exp) {
+          await exp.writer?.abort();
+          exports.current.delete(message.id);
+        }
+      }
+      if (message.type === "exportChunk") {
+        const exp = exports.current.get(message.id);
+        if (exp) {
+          try {
+            if (exp.writer) await exp.writer.write(message.text);
+            else exp.parts.push(message.text);
+            w.postMessage({ type: "exportAck", key: message.key });
+          } catch (e) {
+            w.postMessage({
+              type: "exportAck",
+              key: message.key,
+              error: e.message,
+            });
+          }
+        }
+      }
+      if (message.type === "exportDone") {
+        const exp = exports.current.get(message.id);
+        if (!exp) return;
+        try {
+          await exp.pending;
+          if (exp.writer) await exp.writer.close();
+          else {
+            const url = URL.createObjectURL(
+              new Blob(exp.parts, { type: "text/csv;charset=utf-8;" }),
+            );
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = exp.name;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+          }
+          setToast(`${count(message.count)} records exported`);
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          exports.current.delete(message.id);
+          setExporting(false);
+        }
+      }
+    };
+    w.onerror = (e) => {
+      setError(e.message || "Data worker failed");
+      setBusy(false);
+      setImporting(false);
+    };
+    w.postMessage({ type: "init" });
+    return () => w.terminate();
+  }, []);
+  useEffect(() => {
+    if (!source || importing) return;
+    setBusy(true);
+    const id = ++request.current;
+    const timer = setTimeout(
+      () =>
+        worker.current.postMessage({ type: "query", id, filters, view, page }),
+      220,
+    );
+    return () => clearTimeout(timer);
+  }, [source, filters, view, page, importing]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setDetail(null);
+        setShowSource(false);
+        setMobileNav(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const setFilter = (key, value) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  };
+  const reset = () => {
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+  };
+  const selectView = (v) => {
+    setView(v);
+    setPage(1);
+    setFilters((f) => ({ ...f, search: "", exceptions: false }));
+    setMobileNav(false);
+  };
+  async function exportRows() {
+    if (!data || exporting) return;
+    if (data.matched > 100000 && !window.showSaveFilePicker) {
+      setError(
+        "Large exports require a browser with direct file saving (Chrome or Edge). CSV exports above 100,000 rows are streamed directly to disk.",
+      );
+      return;
+    }
+    const name = `LG-EXIM-${view.replaceAll(" / ", "-")}-${new Date().toISOString().slice(0, 10)}.csv`,
+      id = `export-${Date.now()}`;
+    let writer = null;
+    try {
+      if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description: "CSV", accept: { "text/csv": [".csv"] } }],
+        });
+        writer = await handle.createWritable();
+      }
+      exports.current.set(id, {
+        name,
+        writer,
+        parts: [],
+        pending: Promise.resolve(),
+      });
+      setExporting(true);
+      worker.current.postMessage({
+        type: "export",
+        id,
+        filters,
+        view,
+        columns,
+      });
+    } catch (e) {
+      if (e.name !== "AbortError") setError(e.message);
+    }
+  }
+  const changeFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setError("Select a CSV file.");
+      return;
+    }
+    request.current++;
+    setImporting(true);
+    setProgress(0);
+    setError("");
+    worker.current.postMessage({ type: "load", file });
+  };
+  const active = Object.values(filters).some(
+    (v) => v && v !== "All" && v !== false,
+  );
+  const tableView = ["Data Explorer", "Control Tower"].includes(view);
+  const fields = source?.fields || [];
+  const missingFields =
+    view === "Export"
+      ? ["Actual_Dispatch_Date"].filter((f) => !fields.includes(f))
+      : view === "Supplier"
+        ? ["Planned_Delivery_Date"].filter((f) => !fields.includes(f))
+        : ["Customs", "CHA / Forwarder"].includes(view)
+          ? ["SLA_Days"].filter((f) => !fields.includes(f))
+          : [];
+  return (
+    <div className="app">
+      <aside className={`sidebar ${mobileNav ? "mobile-open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark">LG</div>
+          <div>
+            <strong>EXIM Analytics</strong>
+            <span>Trade operations</span>
+          </div>
+          <button
+            className="mobile-close icon-button"
+            aria-label="Close navigation"
+            onClick={() => setMobileNav(false)}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="nav-label">ANALYSIS</div>
+        <nav>
+          {VIEWS.map((v, i) => {
+            const Icon = ICONS[i];
+            return (
+              <button
+                key={v}
+                className={v === view ? "active" : ""}
+                onClick={() => selectView(v)}
+              >
+                <Icon size={17} />
+                <span>{v}</span>
+                <small>{String(i + 1).padStart(2, "0")}</small>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="sidebar-photo" />
+          <button onClick={() => setShowSource(true)} disabled={!source}>
+            <Database size={16} />
+            <div>
+              <strong>
+                {source ? count(source.count) : "Loading"} records
+              </strong>
+              <span>{source?.classification || "Dataset"}</span>
+            </div>
+            <Info size={14} />
+          </button>
+          <span className="capacity">CSV capacity: 50 lakh records</span>
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="masthead">
+          <div>
+            <button
+              className="icon-button mobile-menu"
+              aria-label="Open navigation"
+              onClick={() => setMobileNav(true)}
+            >
+              <Menu size={20} />
+            </button>
+            <h1>LG EXIM Analytics</h1>
+            <span className="division">Import / Export</span>
+          </div>
+          <div className="masthead-actions">
+            <button
+              className="source-button"
+              onClick={() => setShowSource(true)}
+              disabled={!source}
+            >
+              <span
+                className={`source-dot ${source?.classification === "Synthetic" ? "sample" : ""}`}
+              />
+              {source?.classification || "Loading source"}
+              <Info size={13} />
+            </button>
+            <button
+              className="icon-button"
+              title="Download filtered CSV"
+              onClick={exportRows}
+              disabled={!data || busy || importing || exporting}
+            >
+              <Download size={17} />
+            </button>
+          </div>
+        </header>
+        <main>
+          <div className="view-heading">
+            <div>
+              <h2>
+                {view === "Executive"
+                  ? "Executive overview"
+                  : view === "CHA / Forwarder"
+                    ? "CHA & forwarder performance"
+                    : view}
+              </h2>
+              <span>
+                {source
+                  ? `${source.minDate} - ${source.maxDate}`
+                  : "Preparing dataset"}
+                <i />
+                As of {source?.asOf || "..."}
+              </span>
+            </div>
+            <div className="heading-actions">
+              <button
+                className="button"
+                onClick={() => fileInput.current.click()}
+                disabled={importing || exporting}
+              >
+                <Upload size={15} />
+                Load CSV
+              </button>
+              <input
+                ref={fileInput}
+                className="file-input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={changeFile}
+              />
+              <span className="scope-count">
+                {data ? count(data.total.count) : "..."}
+                <small>records in scope</small>
+              </span>
+            </div>
+          </div>
+          <div className="filters">
+            <div className="filter-row">
+              <label className="date-filter">
+                <span>ETD period</span>
+                <div>
+                  <input
+                    aria-label="ETD start date"
+                    type="date"
+                    value={filters.start}
+                    onChange={(e) => setFilter("start", e.target.value)}
+                  />
+                  <span>to</span>
+                  <input
+                    aria-label="ETD end date"
+                    type="date"
+                    value={filters.end}
+                    onChange={(e) => setFilter("end", e.target.value)}
+                  />
+                </div>
+              </label>
+              {["flow", "mode", "port"].map((k) => (
+                <FilterSelect
+                  key={k}
+                  name={k}
+                  value={filters[k]}
+                  values={data?.options[k] || []}
+                  change={(v) => setFilter(k, v)}
+                />
+              ))}
+              <button
+                className={`button ${more ? "selected" : ""}`}
+                onClick={() => setMore(!more)}
+                aria-expanded={more}
+              >
+                <SlidersHorizontal size={15} />
+                Filters{active && <i className="active-dot" />}
+              </button>
+              <button
+                className="icon-button"
+                title="Reset all filters"
+                aria-label="Reset all filters"
+                onClick={reset}
+              >
+                <RotateCcw size={16} />
+              </button>
+              {busy && (
+                <LoaderCircle
+                  size={16}
+                  className="spinner"
+                  aria-label="Updating charts"
+                />
+              )}
+            </div>
+            {more && (
+              <div className="filter-row extra-filters">
+                {[
+                  "country",
+                  "material",
+                  "risk",
+                  "supplier",
+                  "cha",
+                  "forwarder",
+                  "status",
+                ].map((k) => (
+                  <FilterSelect
+                    key={k}
+                    name={k}
+                    value={filters[k]}
+                    values={data?.options[k] || []}
+                    change={(v) => setFilter(k, v)}
+                  />
+                ))}
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={filters.exceptions}
+                    onChange={(e) => setFilter("exceptions", e.target.checked)}
+                  />
+                  Exceptions only
+                </label>
+              </div>
+            )}
+          </div>
+          {error && (
+            <div className="message error" role="alert">
+              <TriangleAlert size={17} />
+              <span>{error}</span>
+              <button
+                className="icon-button"
+                aria-label="Dismiss error"
+                onClick={() => setError("")}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
+          {importing ? (
+            <div className="loading-state">
+              <LoaderCircle className="spinner" size={28} />
+              <h3>Importing shipment records</h3>
+              <strong>{count(progress)} rows processed</strong>
+            </div>
+          ) : !data ? (
+            <div className="loading-state">
+              <LoaderCircle className="spinner" size={28} />
+              <h3>Calculating dashboard</h3>
+            </div>
+          ) : (
+            <>
+              <div className="population-label">
+                <span>
+                  {["Import", "Customs", "Supplier"].includes(view)
+                    ? "IMPORT RECORDS"
+                    : view === "Export"
+                      ? "EXPORT RECORDS"
+                      : view === "Control Tower"
+                        ? "EXCEPTION RECORDS"
+                        : "ALL FLOWS"}
+                  {active ? " / FILTERED" : ""}
+                </span>
+                <span>
+                  {busy
+                    ? "Updating..."
+                    : `${count(data.seen)} source records reviewed`}
+                </span>
+              </div>
+              {view !== "Data Explorer" && <Summary view={view} data={data} />}{" "}
+              {missingFields.length > 0 && (
+                <div className="coverage-note">
+                  <Info size={14} />
+                  <span>
+                    {view === "Export"
+                      ? "Dispatch performance"
+                      : view === "Supplier"
+                        ? "Supplier OTD"
+                        : "Contractual SLA"}
+                    : unavailable in this source. Missing{" "}
+                    {missingFields.map(title).join(", ")}.
+                  </span>
+                </div>
+              )}
+              {!data.total.count ? (
+                <div className="empty-state">
+                  <Search size={26} />
+                  <h3>No records in this scope</h3>
+                  <button className="button" onClick={reset}>
+                    <RotateCcw size={15} />
+                    Reset filters
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {view !== "Data Explorer" && (
+                    <Analytics view={view} data={data} />
+                  )}{" "}
+                  {view === "Data Explorer" && (
+                    <div className="explorer-summary">
+                      <Metric
+                        label="Source records"
+                        value={count(source.count)}
+                      />
+                      <Metric
+                        label="Matching records"
+                        value={count(data.matched)}
+                      />
+                      <Metric label="Visible columns" value={columns.length} />
+                      <Metric label="Dataset" value={source.classification} />
+                    </div>
+                  )}
+                </>
+              )}
+              {tableView && (
+                <Records
+                  data={data}
+                  view={view}
+                  page={page}
+                  setPage={setPage}
+                  columns={columns}
+                  setColumns={setColumns}
+                  search={filters.search}
+                  setSearch={(v) => setFilter("search", v)}
+                  exportRows={exportRows}
+                  openRow={setDetail}
+                  busy={busy || exporting}
+                />
+              )}
+              {view === "Data Explorer" && (
+                <section className="schema-section">
+                  <h3>CSV schema</h3>
+                  <p>
+                    One row per shipment. Required: Shipment ID, Shipment Type
+                    (Import / Export), ETD. Dates: YYYY-MM-DD. Currency: INR.
+                  </p>
+                  <div>
+                    {FIELDS.map((f) => (
+                      <span key={f}>{f}</span>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+          <footer>
+            <span>LG Electronics / EXIM</span>
+            <button onClick={() => setShowSource(true)} disabled={!source}>
+              Source & metric definitions <Info size={12} />
+            </button>
+          </footer>
+        </main>
+      </div>
+      {showSource && source && (
+        <Source source={source} onClose={() => setShowSource(false)} />
+      )}{" "}
+      {detail && <Detail row={detail} onClose={() => setDetail(null)} />}{" "}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
+      {exporting && (
+        <div className="export-status">
+          <LoaderCircle className="spinner" size={15} />
+          Exporting filtered records...
+        </div>
+      )}
+    </div>
+  );
+}
+function FilterSelect({ name, value, values, change }) {
+  return (
+    <label className="filter-select">
+      <span>
+        {name === "flow"
+          ? "Flow"
+          : name === "country"
+            ? "Origin / destination"
+            : name === "cha"
+              ? "CHA"
+              : name[0].toUpperCase() + name.slice(1)}
+      </span>
+      <select
+        aria-label={
+          name === "country"
+            ? "Origin or destination"
+            : name[0].toUpperCase() + name.slice(1)
+        }
+        value={value}
+        onChange={(e) => change(e.target.value)}
+      >
+        <option value="All">
+          All{" "}
+          {name === "flow"
+            ? "flows"
+            : name === "country"
+              ? "countries"
+              : name + "s"}
+        </option>
+        {values.map((v) => (
+          <option key={v} value={v}>
+            {v}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+const root =
+  import.meta.hot?.data.root || createRoot(document.getElementById("root"));
+if (import.meta.hot) import.meta.hot.data.root = root;
+root.render(<App />);
